@@ -1,16 +1,16 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, {useRef, useEffect, useState} from "react";
 import socket from "../socket.js";
 
 const Whiteboard = () => {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
-  const [brushColor, setBrushColor] = useState("#000");
+  const [brushColor, setBrushColor] = useState("#000000");
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    canvas.width = window.innerWidth * 0.8;
-    canvas.height = window.innerHeight * 0.8;
+    canvas.width = 5000;
+    canvas.height = 5000;
     const ctx = canvas.getContext("2d");
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -39,26 +39,26 @@ const Whiteboard = () => {
     };
   }, []);
 
-  const startDrawing = ({ nativeEvent }) => {
-    const { offsetX, offsetY } = nativeEvent;
+  const startDrawing = ({nativeEvent}) => {
+    const {offsetX, offsetY} = nativeEvent;
     setDrawing(true);
     ctxRef.current.beginPath();
     ctxRef.current.moveTo(offsetX, offsetY);
     // Store the starting point
     ctxRef.current.startX = offsetX;
     ctxRef.current.startY = offsetY;
-    socket.emit("draw_start", { startX: offsetX, startY: offsetY, brushColor });
+    socket.emit("draw_start", {startX: offsetX, startY: offsetY, brushColor});
   };
 
-  const draw = ({ nativeEvent }) => {
+  const draw = ({nativeEvent}) => {
     if (!drawing) return;
-    const { offsetX, offsetY } = nativeEvent;
+    const {offsetX, offsetY} = nativeEvent;
     ctxRef.current.strokeStyle = brushColor;
     ctxRef.current.lineTo(offsetX, offsetY);
     ctxRef.current.stroke();
 
     // Send drawing data to server with starting point
-    socket.emit("draw", { startX: ctxRef.current.startX, startY: ctxRef.current.startY, offsetX, offsetY, brushColor });
+    socket.emit("draw", {startX: ctxRef.current.startX, startY: ctxRef.current.startY, offsetX, offsetY, brushColor});
     // Update the starting point for the next segment
     ctxRef.current.startX = offsetX;
     ctxRef.current.startY = offsetY;
@@ -100,19 +100,21 @@ const Whiteboard = () => {
             height={window.innerHeight}
           />
         </div>
-        <div className="absolute top-0 left-auto mx-auto mt-4 flex gap-4">
-          <input
-            type="color"
-            value={brushColor}
-            onChange={(e) => setBrushColor(e.target.value)}
-            className="border p-2"
-          />
-          <button
-            onClick={clearCanvas}
-            className="bg-red-500 text-white px-4 py-2"
-          >
-            Clear
-          </button>
+        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 flex justify-center items-center mt-4">
+          <div className="flex gap-4 items-center bg-black/50 rounded-xl px-4 py-2 backdrop-blur-xl">
+            <input
+              type="color"
+              value={brushColor}
+              onChange={(e) => setBrushColor(e.target.value)}
+              className="border p-2"
+            />
+            <button
+              onClick={clearCanvas}
+              className="bg-red-500 text-white px-4 py-2 cursor-pointer"
+            >
+              Clear
+            </button>
+          </div>
         </div>
       </div>
     </div>
