@@ -1,11 +1,14 @@
-import React, {useRef, useEffect, useState} from "react";
+import React, {useRef, useEffect, useState, useContext} from "react";
 import socket from "../socket.js";
+import {MoonIcon, SunIcon} from "@heroicons/react/16/solid/index.js";
+import {WhiteboardContext} from "./WhiteBoardContext.jsx";
+import Button from "./sub/button.jsx";
 
 const Whiteboard = () => {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
+  const { brushColor, setBrushColor, darkMode, setDarkMode, isEraser, setIsEraser } = useContext(WhiteboardContext);
   const [drawing, setDrawing] = useState(false);
-  const [brushColor, setBrushColor] = useState("#000000");
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -95,25 +98,27 @@ const Whiteboard = () => {
             onMouseMove={draw}
             onMouseUp={stopDrawing}
             onMouseOut={stopDrawing}
-            className="bg-white"
+            className="bg-white dark:bg-neutral-900"
             width={window.innerWidth}
             height={window.innerHeight}
           />
         </div>
         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 flex justify-center items-center mt-4">
           <div className="flex gap-4 items-center bg-black/50 rounded-xl px-4 py-2 backdrop-blur-xl">
-            <input
-              type="color"
-              value={brushColor}
-              onChange={(e) => setBrushColor(e.target.value)}
-              className="border p-2"
-            />
-            <button
-              onClick={clearCanvas}
-              className="bg-red-500 text-white px-4 py-2 cursor-pointer"
-            >
-              Clear
-            </button>
+            <div className="flex gap-4 items-center">
+              <input
+                type="color"
+                value={brushColor}
+                onChange={(e) => setBrushColor(e.target.value)}
+                className="border p-2"
+              />
+              <Button onClick={clearCanvas} className="bg-red-500 hover:bg-red-700">
+                Clear
+              </Button>
+              <Button onClick={() => setDarkMode(!darkMode)} title={darkMode ? "Light Mode" : "Dark Mode"} className="bg-neutral-500 hover:bg-neutral-700">
+                {darkMode ? <SunIcon className="w-4 h-6"/> : <MoonIcon className="w-4 h-6"/>}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
