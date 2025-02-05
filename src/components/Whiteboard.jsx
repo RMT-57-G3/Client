@@ -83,6 +83,7 @@ const Whiteboard = () => {
         onMouseMove={draw}
         onMouseUp={stopDrawing}
         onMouseOut={stopDrawing}
+        onBlur={stopDrawing}
         className="border border-gray-400 bg-white"
       />
       <div className="mt-4 flex gap-4">
