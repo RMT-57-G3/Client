@@ -7,7 +7,7 @@ import Button from "./sub/button.jsx";
 const Whiteboard = () => {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
-  const { brushColor, setBrushColor, darkMode, setDarkMode, isEraser, setIsEraser } = useContext(WhiteboardContext);
+  const {brushColor, setBrushColor, darkMode, setDarkMode, isEraser, setIsEraser} = useContext(WhiteboardContext);
   const [drawing, setDrawing] = useState(false);
   const [isTextMode, setIsTextMode] = useState(false);
   const [text, setText] = useState("");
@@ -16,7 +16,11 @@ const Whiteboard = () => {
   const [drawingHistory, setDrawingHistory] = useState([]);
   const [dragging, setDragging] = useState(false);
 
-  const lastPositionRef = useRef({ x: 0, y: 0 });
+  const lastPositionRef = useRef({x: 0, y: 0});
+  const [brushColor, setBrushColor] = useState("#000");
+  const [currentShape, setCurrentShape] = useState(null); // Track the shape being drawn
+  const [startPoint, setStartPoint] = useState(null); // Track where the shape starts
+  const [shapes, setShapes] = useState([]); // Store all the drawn shapes
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -64,64 +68,106 @@ const Whiteboard = () => {
     };
   }, []);
 
-  const startDrawing = ({ nativeEvent }) => {
+  // Start drawing function for freehand or shapes
+  const startDrawing = ({nativeEvent}) => {
     if (isTextMode) return;
     if (nativeEvent.buttons !== 1) return; // Only start drawing with left mouse button
     const {offsetX, offsetY} = nativeEvent;
     setDrawing(true);
-    ctxRef.current.beginPath();
-    ctxRef.current.moveTo(offsetX, offsetY);
-    // Store the starting point
-    ctxRef.current.startX = offsetX;
-    ctxRef.current.startY = offsetY;
+    if (currentShape) {
+      setStartPoint({x: offsetX, y: offsetY}); // Start point for shapes
+    } else {
+      ctxRef.current.beginPath();
+      ctxRef.current.moveTo(offsetX, offsetY);
+      // Store the starting point
+      ctxRef.current.startX = offsetX;
+      ctxRef.current.startY = offsetY;
+    }
     socket.emit("draw_start", {startX: offsetX, startY: offsetY, brushColor});
-    lastPositionRef.current = { x: offsetX, y: offsetY }
+    lastPositionRef.current = {x: offsetX, y: offsetY}
   };
 
-  const draw = ({ nativeEvent }) => {
+  // Draw function for both freehand and shapes
+  const draw = ({nativeEvent}) => {
     if (!drawing || isTextMode || nativeEvent.buttons !== 1) return; // Only draw if left button is held
-    const { offsetX, offsetY } = nativeEvent;
-    const { x: lastX, y: lastY } = lastPositionRef.current;
+    const {offsetX, offsetY} = nativeEvent;
+    const {x: lastX, y: lastY} = lastPositionRef.current;
 
-    ctxRef.current.strokeStyle = brushColor;
-    ctxRef.current.moveTo(lastX, lastY); // Move to the last position
-    ctxRef.current.lineTo(offsetX, offsetY); // Draw to the new position
-    ctxRef.current.stroke();
+    if (currentShape && startPoint) {
+      // Drawing shapes: rectangle or circle
+      const ctx = ctxRef.current;
+      ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 
-    lastPositionRef.current = { x: offsetX, y: offsetY };
+      if (currentShape === "rectangle") {
+        const width = offsetX - startPoint.x;
+        const height = offsetY - startPoint.y;
+        ctx.strokeStyle = brushColor;
+        ctx.strokeRect(startPoint.x, startPoint.y, width, height);
+      } else if (currentShape === "circle") {
+        const radius = Math.sqrt(
+          Math.pow(offsetX - startPoint.x, 2) +
+          Math.pow(offsetY - startPoint.y, 2)
+        );
+        ctx.strokeStyle = brushColor;
+        ctx.beginPath();
+        ctx.arc(startPoint.x, startPoint.y, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    } else {
+      ctxRef.current.strokeStyle = brushColor;
+      ctxRef.current.moveTo(lastX, lastY); // Move to the last position
+      ctxRef.current.lineTo(offsetX, offsetY); // Draw to the new position
+      ctxRef.current.stroke();
 
-    const newDrawData = { type: "draw", offsetX, offsetY, lastX, lastY, brushColor };
-    setDrawingHistory((prev) => [...prev, newDrawData]);
-    socket.emit("draw", newDrawData)
-    // Update the starting point for the next segment
-    ctxRef.current.startX = offsetX;
-    ctxRef.current.startY = offsetY;
+      lastPositionRef.current = {x: offsetX, y: offsetY};
+
+      const newDrawData = {type: "draw", offsetX, offsetY, lastX, lastY, brushColor};
+      setDrawingHistory((prev) => [...prev, newDrawData]);
+      socket.emit("draw", newDrawData)
+      // Update the starting point for the next segment
+      ctxRef.current.startX = offsetX;
+      ctxRef.current.startY = offsetY;
+    }
   };
 
   const stopDrawing = () => {
     setDrawing(false);
-    ctxRef.current.closePath();
+    if (!currentShape) {
+      ctxRef.current.closePath();
+    }
   };
 
   const drawOnCanvas = () => {
     const ctx = ctxRef.current;
+    ctx.strokeStyle = data.brushColor;
 
-    drawingHistory.forEach((data) => {
-      ctx.strokeStyle = data.brushColor;
-      ctx.beginPath();
-      ctx.moveTo(data.lastX, data.lastY);
-      ctx.lineTo(data.offsetX, data.offsetY);
-      ctx.stroke();
-      ctx.closePath();
-    });
+    if (data.type) {
+      // Shape drawing
+      if (data.type === "rectangle") {
+        ctx.strokeRect(data.startX, data.startY, data.width, data.height);
+      } else if (data.type === "circle") {
+        ctx.beginPath();
+        ctx.arc(data.startX, data.startY, data.radius, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    } else {
+      drawingHistory.forEach((data) => {
+        ctx.strokeStyle = data.brushColor;
+        ctx.beginPath();
+        ctx.moveTo(data.lastX, data.lastY);
+        ctx.lineTo(data.offsetX, data.offsetY);
+        ctx.stroke();
+        ctx.closePath();
+      });
 
-    texts.forEach((data) => {
-      ctx.fillStyle = data.brushColor;
-      ctx.font = "16px Arial";
-      ctx.fillText(data.text, data.x, data.y);
-      ctx.closePath();
-  });
-}
+      texts.forEach((data) => {
+        ctx.fillStyle = data.brushColor;
+        ctx.font = "16px Arial";
+        ctx.fillText(data.text, data.x, data.y);
+        ctx.closePath();
+      });
+    }
+  }
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
@@ -129,6 +175,12 @@ const Whiteboard = () => {
     setDrawingHistory([]);
     setTexts([]);
     socket.emit("clear_board");
+  };
+
+  // Handle shape selection
+  const handleShapeSelection = (shape) => {
+    setCurrentShape(shape);
+    setStartPoint(null); // Reset the start point
   };
 
   const handleTextClick = ({ nativeEvent }) => {
@@ -219,6 +271,24 @@ const Whiteboard = () => {
               <Button onClick={() => setDarkMode(!darkMode)} title={darkMode ? "Light Mode" : "Dark Mode"} className="bg-neutral-500 hover:bg-neutral-700">
                 {darkMode ? <SunIcon className="w-4 h-6"/> : <MoonIcon className="w-4 h-6"/>}
               </Button>
+              <button
+                onClick={() => handleShapeSelection("rectangle")}
+                className="bg-blue-500 text-white px-4 py-2"
+              >
+                Rectangle
+              </button>
+              <button
+                onClick={() => handleShapeSelection("circle")}
+                className="bg-green-500 text-white px-4 py-2"
+              >
+                Circle
+              </button>
+              <button
+                onClick={() => handleShapeSelection(null)} // Freehand drawing
+                className="bg-gray-500 text-white px-4 py-2"
+              >
+                Freehand
+              </button>
               <button
                 onClick={() => setIsTextMode(!isTextMode)}
                 className={`${
