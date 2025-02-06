@@ -17,7 +17,6 @@ const Whiteboard = () => {
   const [dragging, setDragging] = useState(false);
 
   const lastPositionRef = useRef({x: 0, y: 0});
-  const [brushColor, setBrushColor] = useState("#000");
   const [currentShape, setCurrentShape] = useState(null); // Track the shape being drawn
   const [startPoint, setStartPoint] = useState(null); // Track where the shape starts
   const [shapes, setShapes] = useState([]); // Store all the drawn shapes
@@ -271,32 +270,32 @@ const Whiteboard = () => {
               <Button onClick={() => setDarkMode(!darkMode)} title={darkMode ? "Light Mode" : "Dark Mode"} className="bg-neutral-500 hover:bg-neutral-700">
                 {darkMode ? <SunIcon className="w-4 h-6"/> : <MoonIcon className="w-4 h-6"/>}
               </Button>
-              <button
+              <Button
                 onClick={() => handleShapeSelection("rectangle")}
-                className="bg-blue-500 text-white px-4 py-2"
+                className="bg-blue-500 hover:bg-blue-700 text-white"
               >
                 Rectangle
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => handleShapeSelection("circle")}
-                className="bg-green-500 text-white px-4 py-2"
+                className="bg-green-500 hover:bg-green-700 text-white"
               >
                 Circle
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => handleShapeSelection(null)} // Freehand drawing
-                className="bg-gray-500 text-white px-4 py-2"
+                className="bg-gray-500 hover:bg-gray-700 text-white"
               >
                 Freehand
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => setIsTextMode(!isTextMode)}
                 className={`${
-                  isTextMode ? "bg-blue-500" : "bg-gray-500"
-                } text-white px-4 py-2`}
+                  isTextMode ? "bg-blue-500 hover:bg-blue-700" : "bg-gray-500 hover:bg-gray-700"
+                } text-white`}
               >
                 {isTextMode ? "Drawing Mode" : "Text Mode"}
-              </button>
+              </Button>
               {isTextMode && (
                 <div className="flex gap-2">
                   <input
