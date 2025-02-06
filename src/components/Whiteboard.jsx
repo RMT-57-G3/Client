@@ -120,8 +120,8 @@ const Whiteboard = () => {
       ctx.font = "16px Arial";
       ctx.fillText(data.text, data.x, data.y);
       ctx.closePath();
-  });
-}
+    });
+  }
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
@@ -219,14 +219,14 @@ const Whiteboard = () => {
               <Button onClick={() => setDarkMode(!darkMode)} title={darkMode ? "Light Mode" : "Dark Mode"} className="bg-neutral-500 hover:bg-neutral-700">
                 {darkMode ? <SunIcon className="w-4 h-6"/> : <MoonIcon className="w-4 h-6"/>}
               </Button>
-              <button
+              <Button
                 onClick={() => setIsTextMode(!isTextMode)}
                 className={`${
-                  isTextMode ? "bg-blue-500" : "bg-gray-500"
-                } text-white px-4 py-2`}
+                  isTextMode ? "bg-blue-500 hover:bg-blue-700" : "bg-gray-500 hover:bg-gray-700"
+                } text-white`}
               >
                 {isTextMode ? "Drawing Mode" : "Text Mode"}
-              </button>
+              </Button>
               {isTextMode && (
                 <div className="flex gap-2">
                   <input
@@ -234,7 +234,7 @@ const Whiteboard = () => {
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     placeholder="Enter text"
-                    className="border p-2 dark:border-white dark:text-white"
+                    className="border px-2 py-1 border-white text-white"
                   />
                 </div>
               )}
