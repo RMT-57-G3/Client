@@ -234,7 +234,7 @@ const Whiteboard = () => {
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     placeholder="Enter text"
-                    className="border p-2"
+                    className="border p-2 dark:border-white dark:text-white"
                   />
                 </div>
               )}
