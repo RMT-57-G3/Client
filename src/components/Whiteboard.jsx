@@ -1,11 +1,14 @@
-import { useRef, useEffect, useState } from "react";
-import socket from "../socket";
+import React, {useRef, useEffect, useState, useContext} from "react";
+import socket from "../socket.js";
+import {MoonIcon, SunIcon} from "@heroicons/react/16/solid/index.js";
+import {WhiteboardContext} from "./WhiteBoardContext.jsx";
+import Button from "./sub/button.jsx";
 
 const Whiteboard = () => {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
+  const { brushColor, setBrushColor, darkMode, setDarkMode, isEraser, setIsEraser } = useContext(WhiteboardContext);
   const [drawing, setDrawing] = useState(false);
-  const [brushColor, setBrushColor] = useState("#000");
   const [isTextMode, setIsTextMode] = useState(false);
   const [text, setText] = useState("");
   const [texts, setTexts] = useState([]);
@@ -17,8 +20,8 @@ const Whiteboard = () => {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    canvas.width = window.innerWidth * 0.8;
-    canvas.height = window.innerHeight * 0.8;
+    canvas.width = 5000;
+    canvas.height = 5000;
     const ctx = canvas.getContext("2d");
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -28,7 +31,7 @@ const Whiteboard = () => {
     socket.on("load_whiteboard", (data) => {
       const drawings = [];
       const textItems = [];
-      
+
       data.forEach((item) => {
         if (item.type === "draw") {
           drawings.push(item);
@@ -64,9 +67,14 @@ const Whiteboard = () => {
   const startDrawing = ({ nativeEvent }) => {
     if (isTextMode) return;
     if (nativeEvent.buttons !== 1) return; // Only start drawing with left mouse button
-    const { offsetX, offsetY } = nativeEvent;
+    const {offsetX, offsetY} = nativeEvent;
     setDrawing(true);
     ctxRef.current.beginPath();
+    ctxRef.current.moveTo(offsetX, offsetY);
+    // Store the starting point
+    ctxRef.current.startX = offsetX;
+    ctxRef.current.startY = offsetY;
+    socket.emit("draw_start", {startX: offsetX, startY: offsetY, brushColor});
     lastPositionRef.current = { x: offsetX, y: offsetY }
   };
 
@@ -85,6 +93,9 @@ const Whiteboard = () => {
     const newDrawData = { type: "draw", offsetX, offsetY, lastX, lastY, brushColor };
     setDrawingHistory((prev) => [...prev, newDrawData]);
     socket.emit("draw", newDrawData)
+    // Update the starting point for the next segment
+    ctxRef.current.startX = offsetX;
+    ctxRef.current.startY = offsetY;
   };
 
   const stopDrawing = () => {
@@ -101,12 +112,14 @@ const Whiteboard = () => {
       ctx.moveTo(data.lastX, data.lastY);
       ctx.lineTo(data.offsetX, data.offsetY);
       ctx.stroke();
+      ctx.closePath();
     });
 
     texts.forEach((data) => {
       ctx.fillStyle = data.brushColor;
       ctx.font = "16px Arial";
       ctx.fillText(data.text, data.x, data.y);
+      ctx.closePath();
   });
 }
 
@@ -175,49 +188,59 @@ const Whiteboard = () => {
   }, [drawingHistory, texts])
 
   return (
-    <div className="flex flex-col items-center p-4">
-      <canvas
-        ref={canvasRef}
-        onMouseDown={(e) => (isTextMode ? handleTextClick(e) : startDrawing(e))}
-        onMouseMove={(e) => (dragging ? handleMouseMove(e) : draw(e))}
-        onMouseUp={handleMouseUp}
-        onMouseOut={stopDrawing}
-        className={`border border-gray-400 bg-white ${
-          isTextMode ? "cursor-text" : "cursor-crosshair"
-        }`}
-      />
-      <div className="mt-4 flex gap-4">
-        <input
-          type="color"
-          value={brushColor}
-          onChange={(e) => setBrushColor(e.target.value)}
-          className="border p-2"
-        />
-        <button
-          onClick={clearCanvas}
-          className="bg-red-500 text-white px-4 py-2"
-        >
-          Clear
-        </button>
-        <button
-          onClick={() => setIsTextMode(!isTextMode)}
-          className={`${
-            isTextMode ? "bg-blue-500" : "bg-gray-500"
-          } text-white px-4 py-2`}
-        >
-          {isTextMode ? "Drawing Mode" : "Text Mode"}
-        </button>
-        {isTextMode && (
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Enter text"
-              className="border p-2"
-            />
+    <div className="flex flex-col items-center">
+      <div className="relative w-full h-screen border border-gray-400 rounded-md">
+        <div className="relative w-full h-screen overflow-x-scroll overflow-y-scroll">
+          <canvas
+            ref={canvasRef}
+            onMouseDown={(e) => (isTextMode ? handleTextClick(e) : startDrawing(e))}
+            onMouseMove={(e) => (dragging ? handleMouseMove(e) : draw(e))}
+            onMouseUp={handleMouseUp}
+            onMouseOut={stopDrawing}
+            className={`bg-white dark:bg-neutral-900 ${
+              isTextMode ? "cursor-text" : "cursor-crosshair"
+            }`}
+            width={window.innerWidth}
+            height={window.innerHeight}
+          />
+        </div>
+        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 flex justify-center items-center mt-4">
+          <div className="flex gap-4 items-center bg-black/50 rounded-xl px-4 py-2 backdrop-blur-xl">
+            <div className="flex gap-4 items-center">
+              <input
+                type="color"
+                value={brushColor}
+                onChange={(e) => setBrushColor(e.target.value)}
+                className="border p-2"
+              />
+              <Button onClick={clearCanvas} className="bg-red-500 hover:bg-red-700">
+                Clear
+              </Button>
+              <Button onClick={() => setDarkMode(!darkMode)} title={darkMode ? "Light Mode" : "Dark Mode"} className="bg-neutral-500 hover:bg-neutral-700">
+                {darkMode ? <SunIcon className="w-4 h-6"/> : <MoonIcon className="w-4 h-6"/>}
+              </Button>
+              <button
+                onClick={() => setIsTextMode(!isTextMode)}
+                className={`${
+                  isTextMode ? "bg-blue-500" : "bg-gray-500"
+                } text-white px-4 py-2`}
+              >
+                {isTextMode ? "Drawing Mode" : "Text Mode"}
+              </button>
+              {isTextMode && (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Enter text"
+                    className="border p-2"
+                  />
+                </div>
+              )}
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
