@@ -1,135 +1,22 @@
-// import React, { useRef, useEffect, useState } from "react";
-// import socket from "../socket.js";
-
-// const Whiteboard = () => {
-//   const canvasRef = useRef(null);
-//   const ctxRef = useRef(null);
-//   const [drawing, setDrawing] = useState(false);
-//   const [brushColor, setBrushColor] = useState("#000");
-
-//   useEffect(() => {
-//     const canvas = canvasRef.current;
-//     canvas.width = window.innerWidth * 0.8;
-//     canvas.height = window.innerHeight * 0.8;
-//     const ctx = canvas.getContext("2d");
-//     ctx.lineCap = "round";
-//     ctx.lineJoin = "round";
-//     ctx.lineWidth = 3;
-//     ctxRef.current = ctx;
-
-//     // Load existing whiteboard data when connecting
-//     socket.on("load_whiteboard", (data) => {
-//       data.forEach(drawOnCanvas);
-//     });
-
-//     // Real-time update when others draw
-//     socket.on("update_whiteboard", (data) => {
-//       drawOnCanvas(data);
-//     });
-
-//     // Clear whiteboard when reset
-//     socket.on("clear_board", () => {
-//       ctx.clearRect(0, 0, canvas.width, canvas.height);
-//     });
-
-//     return () => {
-//       socket.off("update_whiteboard");
-//       socket.off("clear_board");
-//       socket.off("load_whiteboard");
-//     };
-//   }, []);
-
-//   const startDrawing = ({ nativeEvent }) => {
-//     const { offsetX, offsetY } = nativeEvent;
-//     setDrawing(true);
-//     ctxRef.current.beginPath();
-//     ctxRef.current.moveTo(offsetX, offsetY);
-//     // Store the starting point
-//     ctxRef.current.startX = offsetX;
-//     ctxRef.current.startY = offsetY;
-//     socket.emit("draw_start", { startX: offsetX, startY: offsetY, brushColor });
-//   };
-
-//   const draw = ({ nativeEvent }) => {
-//     if (!drawing) return;
-//     const { offsetX, offsetY } = nativeEvent;
-//     ctxRef.current.strokeStyle = brushColor;
-//     ctxRef.current.lineTo(offsetX, offsetY);
-//     ctxRef.current.stroke();
-
-//     // Send drawing data to server with starting point
-//     socket.emit("draw", { startX: ctxRef.current.startX, startY: ctxRef.current.startY, offsetX, offsetY, brushColor });
-//     // Update the starting point for the next segment
-//     ctxRef.current.startX = offsetX;
-//     ctxRef.current.startY = offsetY;
-//   };
-
-//   const stopDrawing = () => {
-//     setDrawing(false);
-//     ctxRef.current.closePath();
-//   };
-
-//   const drawOnCanvas = (data) => {
-//     const ctx = ctxRef.current;
-//     ctx.beginPath();
-//     ctx.moveTo(data.startX, data.startY);
-//     ctx.strokeStyle = data.brushColor;
-//     ctx.lineTo(data.offsetX, data.offsetY);
-//     ctx.stroke();
-//     ctx.closePath();
-//   };
-
-//   const clearCanvas = () => {
-//     const canvas = canvasRef.current;
-//     ctxRef.current.clearRect(0, 0, canvas.width, canvas.height);
-//     socket.emit("clear_board");
-//   };
-
-//   return (
-//     <div className="flex flex-col items-center">
-//       <div className="relative w-full h-screen border border-gray-400 rounded-md">
-//         <div className="relative w-full h-screen overflow-x-scroll overflow-y-scroll">
-//           <canvas
-//             ref={canvasRef}
-//             onMouseDown={startDrawing}
-//             onMouseMove={draw}
-//             onMouseUp={stopDrawing}
-//             onMouseOut={stopDrawing}
-//             className="bg-white"
-//             width={window.innerWidth}
-//             height={window.innerHeight}
-//           />
-//         </div>
-//         <div className="absolute top-0 left-auto mx-auto mt-4 flex gap-4">
-//           <input
-//             type="color"
-//             value={brushColor}
-//             onChange={(e) => setBrushColor(e.target.value)}
-//             className="border p-2"
-//           />
-//           <button
-//             onClick={clearCanvas}
-//             className="bg-red-500 text-white px-4 py-2"
-//           >
-//             Clear
-//           </button>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default Whiteboard;
-
-///-----------------------yang diganti jadi dibawah ini --------------------------///
-
-import React, { useRef, useEffect, useState } from "react";
-import socket from "../socket";
+import React, {useRef, useEffect, useState, useContext} from "react";
+import socket from "../socket.js";
+import {MoonIcon, SunIcon} from "@heroicons/react/16/solid/index.js";
+import {WhiteboardContext} from "./WhiteBoardContext.jsx";
+import Button from "./sub/button.jsx";
 
 const Whiteboard = () => {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
+  const {brushColor, setBrushColor, darkMode, setDarkMode, isEraser, setIsEraser} = useContext(WhiteboardContext);
   const [drawing, setDrawing] = useState(false);
+  const [isTextMode, setIsTextMode] = useState(false);
+  const [text, setText] = useState("");
+  const [texts, setTexts] = useState([]);
+  const [selectedTextIndex, setSelectedTextIndex] = useState(null);
+  const [drawingHistory, setDrawingHistory] = useState([]);
+  const [dragging, setDragging] = useState(false);
+
+  const lastPositionRef = useRef({x: 0, y: 0});
   const [brushColor, setBrushColor] = useState("#000");
   const [currentShape, setCurrentShape] = useState(null); // Track the shape being drawn
   const [startPoint, setStartPoint] = useState(null); // Track where the shape starts
@@ -137,27 +24,41 @@ const Whiteboard = () => {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    canvas.width = window.innerWidth * 0.8;
-    canvas.height = window.innerHeight * 0.8;
+    canvas.width = 5000;
+    canvas.height = 5000;
     const ctx = canvas.getContext("2d");
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.lineWidth = 3;
     ctxRef.current = ctx;
 
-    // Load existing whiteboard data when connecting
     socket.on("load_whiteboard", (data) => {
-      data.forEach(drawOnCanvas);
-    });
+      const drawings = [];
+      const textItems = [];
 
-    // Real-time update when others draw
+      data.forEach((item) => {
+        if (item.type === "draw") {
+          drawings.push(item);
+        } else if (item.type === "text") {
+          textItems.push(item);
+        }
+      });
+      setDrawingHistory(drawings);
+      setTexts(textItems);
+    })
+
     socket.on("update_whiteboard", (data) => {
-      drawOnCanvas(data);
-    });
+      if (data.type === "draw") {
+        setDrawingHistory(prev => [...prev, data]);
+      } else if (data.type === "text") {
+        setTexts(prev => [...prev, data]);
+      }
+    })
 
-    // Clear whiteboard when reset
     socket.on("clear_board", () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setTexts([]);
+      setDrawingHistory([]);
     });
 
     return () => {
@@ -168,21 +69,29 @@ const Whiteboard = () => {
   }, []);
 
   // Start drawing function for freehand or shapes
-  const startDrawing = ({ nativeEvent }) => {
-    const { offsetX, offsetY } = nativeEvent;
+  const startDrawing = ({nativeEvent}) => {
+    if (isTextMode) return;
+    if (nativeEvent.buttons !== 1) return; // Only start drawing with left mouse button
+    const {offsetX, offsetY} = nativeEvent;
     setDrawing(true);
     if (currentShape) {
-      setStartPoint({ x: offsetX, y: offsetY }); // Start point for shapes
+      setStartPoint({x: offsetX, y: offsetY}); // Start point for shapes
     } else {
       ctxRef.current.beginPath();
       ctxRef.current.moveTo(offsetX, offsetY);
+      // Store the starting point
+      ctxRef.current.startX = offsetX;
+      ctxRef.current.startY = offsetY;
     }
+    socket.emit("draw_start", {startX: offsetX, startY: offsetY, brushColor});
+    lastPositionRef.current = {x: offsetX, y: offsetY}
   };
 
   // Draw function for both freehand and shapes
-  const draw = ({ nativeEvent }) => {
-    const { offsetX, offsetY } = nativeEvent;
-    if (!drawing) return;
+  const draw = ({nativeEvent}) => {
+    if (!drawing || isTextMode || nativeEvent.buttons !== 1) return; // Only draw if left button is held
+    const {offsetX, offsetY} = nativeEvent;
+    const {x: lastX, y: lastY} = lastPositionRef.current;
 
     if (currentShape && startPoint) {
       // Drawing shapes: rectangle or circle
@@ -197,7 +106,7 @@ const Whiteboard = () => {
       } else if (currentShape === "circle") {
         const radius = Math.sqrt(
           Math.pow(offsetX - startPoint.x, 2) +
-            Math.pow(offsetY - startPoint.y, 2)
+          Math.pow(offsetY - startPoint.y, 2)
         );
         ctx.strokeStyle = brushColor;
         ctx.beginPath();
@@ -205,11 +114,19 @@ const Whiteboard = () => {
         ctx.stroke();
       }
     } else {
-      // Freehand drawing
       ctxRef.current.strokeStyle = brushColor;
-      ctxRef.current.lineTo(offsetX, offsetY);
+      ctxRef.current.moveTo(lastX, lastY); // Move to the last position
+      ctxRef.current.lineTo(offsetX, offsetY); // Draw to the new position
       ctxRef.current.stroke();
-      socket.emit("draw", { offsetX, offsetY, brushColor });
+
+      lastPositionRef.current = {x: offsetX, y: offsetY};
+
+      const newDrawData = {type: "draw", offsetX, offsetY, lastX, lastY, brushColor};
+      setDrawingHistory((prev) => [...prev, newDrawData]);
+      socket.emit("draw", newDrawData)
+      // Update the starting point for the next segment
+      ctxRef.current.startX = offsetX;
+      ctxRef.current.startY = offsetY;
     }
   };
 
@@ -220,8 +137,7 @@ const Whiteboard = () => {
     }
   };
 
-  // Draw existing data on canvas
-  const drawOnCanvas = (data) => {
+  const drawOnCanvas = () => {
     const ctx = ctxRef.current;
     ctx.strokeStyle = data.brushColor;
 
@@ -235,15 +151,29 @@ const Whiteboard = () => {
         ctx.stroke();
       }
     } else {
-      // Freehand drawing
-      ctx.lineTo(data.offsetX, data.offsetY);
-      ctx.stroke();
+      drawingHistory.forEach((data) => {
+        ctx.strokeStyle = data.brushColor;
+        ctx.beginPath();
+        ctx.moveTo(data.lastX, data.lastY);
+        ctx.lineTo(data.offsetX, data.offsetY);
+        ctx.stroke();
+        ctx.closePath();
+      });
+
+      texts.forEach((data) => {
+        ctx.fillStyle = data.brushColor;
+        ctx.font = "16px Arial";
+        ctx.fillText(data.text, data.x, data.y);
+        ctx.closePath();
+      });
     }
-  };
+  }
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     ctxRef.current.clearRect(0, 0, canvas.width, canvas.height);
+    setDrawingHistory([]);
+    setTexts([]);
     socket.emit("clear_board");
   };
 
@@ -253,53 +183,134 @@ const Whiteboard = () => {
     setStartPoint(null); // Reset the start point
   };
 
+  const handleTextClick = ({ nativeEvent }) => {
+    if (!isTextMode) return;
+    const { offsetX, offsetY } = nativeEvent;
+
+    const clickedIndex = texts.findIndex(
+      (t) =>
+        offsetX >= t.x &&
+        offsetX <= t.x + t.width &&
+        offsetY >= t.y - 16 &&
+        offsetY <= t.y
+    );
+
+    if (clickedIndex !== -1) {
+      setSelectedTextIndex(clickedIndex);
+      setDragging(true);
+    } else {
+      const ctx = ctxRef.current;
+      ctx.font = "16px Arial";
+      const width = ctx.measureText(text).width;
+
+      const newTextData = { text, x: offsetX, y: offsetY, width, brushColor };
+      setTexts((prev) => [...prev, newTextData]);
+      setText("");
+      socket.emit("draw", { type: "text", ...newTextData });
+    }
+  };
+
+  const handleMouseMove = ({ nativeEvent }) => {
+    if (!dragging || selectedTextIndex === null) return;
+
+    const { offsetX, offsetY } = nativeEvent;
+
+    setTexts((prev) =>
+      prev.map((t, index) =>
+        index === selectedTextIndex ? { ...t, x: offsetX, y: offsetY } : t
+      )
+    );
+  };
+
+  const handleMouseUp = () => {
+    if (dragging && selectedTextIndex !== null) {
+      const updatedText = texts[selectedTextIndex];
+      socket.emit("draw", { type: "text", ...updatedText });
+    }
+    setDragging(false);
+    setSelectedTextIndex(null);
+  };
+
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    const canvas = canvasRef.current;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawOnCanvas();
+  }, [drawingHistory, texts])
+
   return (
-    <div className="flex flex-col items-center p-4">
-      <canvas
-        ref={canvasRef}
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={stopDrawing}
-        onMouseOut={stopDrawing}
-        onBlur={stopDrawing}
-        className="border border-gray-400 bg-white"
-      />
-      <div className="mt-4 flex gap-4">
-        {/* Brush Color Picker */}
-        <input
-          type="color"
-          value={brushColor}
-          onChange={(e) => setBrushColor(e.target.value)}
-          className="border p-2"
-        />
-
-        {/* Shape Buttons */}
-        <button
-          onClick={() => handleShapeSelection("rectangle")}
-          className="bg-blue-500 text-white px-4 py-2"
-        >
-          Rectangle
-        </button>
-        <button
-          onClick={() => handleShapeSelection("circle")}
-          className="bg-green-500 text-white px-4 py-2"
-        >
-          Circle
-        </button>
-        <button
-          onClick={() => handleShapeSelection(null)} // Freehand drawing
-          className="bg-gray-500 text-white px-4 py-2"
-        >
-          Freehand
-        </button>
-
-        {/* Clear Button */}
-        <button
-          onClick={clearCanvas}
-          className="bg-red-500 text-white px-4 py-2"
-        >
-          Clear
-        </button>
+    <div className="flex flex-col items-center">
+      <div className="relative w-full h-screen border border-gray-400 rounded-md">
+        <div className="relative w-full h-screen overflow-x-scroll overflow-y-scroll">
+          <canvas
+            ref={canvasRef}
+            onMouseDown={(e) => (isTextMode ? handleTextClick(e) : startDrawing(e))}
+            onMouseMove={(e) => (dragging ? handleMouseMove(e) : draw(e))}
+            onMouseUp={handleMouseUp}
+            onMouseOut={stopDrawing}
+            className={`bg-white dark:bg-neutral-900 ${
+              isTextMode ? "cursor-text" : "cursor-crosshair"
+            }`}
+            width={window.innerWidth}
+            height={window.innerHeight}
+          />
+        </div>
+        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 flex justify-center items-center mt-4">
+          <div className="flex gap-4 items-center bg-black/50 rounded-xl px-4 py-2 backdrop-blur-xl">
+            <div className="flex gap-4 items-center">
+              <input
+                type="color"
+                value={brushColor}
+                onChange={(e) => setBrushColor(e.target.value)}
+                className="border p-2"
+              />
+              <Button onClick={clearCanvas} className="bg-red-500 hover:bg-red-700">
+                Clear
+              </Button>
+              <Button onClick={() => setDarkMode(!darkMode)} title={darkMode ? "Light Mode" : "Dark Mode"} className="bg-neutral-500 hover:bg-neutral-700">
+                {darkMode ? <SunIcon className="w-4 h-6"/> : <MoonIcon className="w-4 h-6"/>}
+              </Button>
+              <button
+                onClick={() => handleShapeSelection("rectangle")}
+                className="bg-blue-500 text-white px-4 py-2"
+              >
+                Rectangle
+              </button>
+              <button
+                onClick={() => handleShapeSelection("circle")}
+                className="bg-green-500 text-white px-4 py-2"
+              >
+                Circle
+              </button>
+              <button
+                onClick={() => handleShapeSelection(null)} // Freehand drawing
+                className="bg-gray-500 text-white px-4 py-2"
+              >
+                Freehand
+              </button>
+              <button
+                onClick={() => setIsTextMode(!isTextMode)}
+                className={`${
+                  isTextMode ? "bg-blue-500" : "bg-gray-500"
+                } text-white px-4 py-2`}
+              >
+                {isTextMode ? "Drawing Mode" : "Text Mode"}
+              </button>
+              {isTextMode && (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Enter text"
+                    className="border p-2"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
